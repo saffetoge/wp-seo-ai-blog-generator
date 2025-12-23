@@ -148,16 +148,14 @@ class WPBG_Update_Checker
     }
 
     /**
-     * Get download URL - use zipball for private repos (more reliable)
+     * Get download URL - prefer GitHub zipball for reliability.
      */
     private function get_release_download_url($remote)
     {
-        // For private repos, always use zipball_url (works with token auth)
-        if ($this->github_token && isset($remote->zipball_url)) {
+        if (isset($remote->zipball_url)) {
             return $remote->zipball_url;
         }
 
-        // For public repos, try asset first
         if (isset($remote->assets) && is_array($remote->assets)) {
             foreach ($remote->assets as $asset) {
                 if (!empty($asset->browser_download_url) && preg_match('/\.zip$/i', $asset->name)) {
@@ -166,7 +164,7 @@ class WPBG_Update_Checker
             }
         }
 
-        return isset($remote->zipball_url) ? $remote->zipball_url : '';
+        return '';
     }
 
     /**
