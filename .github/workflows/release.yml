@@ -1,4 +1,4 @@
-name: Auto Release on Push
+name: Release Plugin
 
 on:
   push:
@@ -11,51 +11,46 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Get plugin version from file
+      - name: Read version
         id: version
         run: |
-          VERSION=$(grep -oP "Version:\s*\K[0-9.]+" wp-product-blog-generator.php)
-          echo "VERSION=v$VERSION" >> $GITHUB_OUTPUT
-          echo "Plugin version: $VERSION"
-
-      - name: Check if release exists
-        id: check_release
-        run: |
-          if gh release view ${{ steps.version.outputs.VERSION }} > /dev/null 2>&1; then
-            echo "EXISTS=true" >> $GITHUB_OUTPUT
-          else
-            echo "EXISTS=false" >> $GITHUB_OUTPUT
+          version="$(awk -F': ' '/^ *Version:/ {print $2; exit}' wp-product-blog-generator.php)"
+          if [ -z "$version" ]; then
+            echo "Version not found in plugin header."
+            exit 1
           fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
 
-      - name: Delete existing release if exists
-        if: steps.check_release.outputs.EXISTS == 'true'
+      - name: Check if tag exists
+        id: tag_check
         run: |
-          gh release delete ${{ steps.version.outputs.VERSION }} --yes
-          git push origin --delete ${{ steps.version.outputs.VERSION }} || true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          if git rev-parse "${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Create plugin ZIP
+      - name: Create tag
+        if: steps.tag_check.outputs.exists == 'false'
         run: |
-          mkdir -p build/wp-product-blog-generator
-          rsync -av --exclude='.git' --exclude='.github' --exclude='build' ./ build/wp-product-blog-generator/
-          cd build
-          zip -r wp-product-blog-generator.zip wp-product-blog-generator
+          git tag "${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
 
-      - name: Create Release with ZIP
-        uses: softprops/action-gh-release@v1
+      - name: Build plugin zip
+        run: |
+          zip -r wp-product-blog-generator.zip \
+            wp-product-blog-generator \
+            -x "wp-product-blog-generator/.git/*"
+
+      - name: Create GitHub release
+        if: steps.tag_check.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.VERSION }}
-          name: Version ${{ steps.version.outputs.VERSION }}
-          body: |
-            Otomatik release - ${{ steps.version.outputs.VERSION }}
-          files: build/wp-product-blog-generator.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          files: wp-product-blog-generator.zip
