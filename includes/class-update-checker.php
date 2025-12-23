@@ -39,6 +39,7 @@ class WPBG_Update_Checker
         add_filter('plugins_api', array($this, 'plugin_info'), 20, 3);
         add_filter('http_request_args', array($this, 'add_github_auth_header'), 10, 2);
         add_filter('upgrader_source_selection', array($this, 'rename_github_folder'), 10, 4);
+        add_filter('upgrader_pre_download', array($this, 'pre_download_filter'), 10, 3);
         add_action('admin_notices', array($this, 'show_update_status_notice'));
     }
 
@@ -200,6 +201,55 @@ class WPBG_Update_Checker
         $args['headers']['Authorization'] = 'token ' . $this->github_token;
 
         return $args;
+    }
+
+    /**
+     * Pre-download filter to handle GitHub private repo downloads
+     */
+    public function pre_download_filter($reply, $package, $upgrader)
+    {
+        if (empty($package) || empty($this->github_token)) {
+            return $reply;
+        }
+
+        // Check if this is a GitHub URL for our repo
+        if (strpos($package, 'github.com') === false && strpos($package, 'api.github.com') === false) {
+            return $reply;
+        }
+
+        if (strpos($package, $this->repository) === false) {
+            return $reply;
+        }
+
+        // Download the file ourselves with proper authentication
+        $tmpfname = wp_tempnam($package);
+        if (!$tmpfname) {
+            return new WP_Error('http_error', __('Geçici dosya oluşturulamadı.', 'wp-product-blog-generator'));
+        }
+
+        $response = wp_remote_get($package, array(
+            'timeout' => 300,
+            'stream' => true,
+            'filename' => $tmpfname,
+            'headers' => array(
+                'Authorization' => 'token ' . $this->github_token,
+                'Accept' => 'application/vnd.github.v3+json',
+                'User-Agent' => 'WordPress/' . get_bloginfo('version')
+            )
+        ));
+
+        if (is_wp_error($response)) {
+            @unlink($tmpfname);
+            return $response;
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        if ($response_code !== 200) {
+            @unlink($tmpfname);
+            return new WP_Error('http_error', sprintf(__('İndirme hatası: HTTP %d', 'wp-product-blog-generator'), $response_code));
+        }
+
+        return $tmpfname;
     }
 
     /**
