@@ -148,20 +148,22 @@ class WPBG_Update_Checker
     }
 
     /**
-     * Get download URL - prefer GitHub zipball for reliability.
+     * Get download URL - prefer release asset ZIP (correct folder structure)
      */
     private function get_release_download_url($remote)
     {
-        if (isset($remote->zipball_url)) {
-            return $remote->zipball_url;
-        }
-
+        // First try release assets (has correct folder name)
         if (isset($remote->assets) && is_array($remote->assets)) {
             foreach ($remote->assets as $asset) {
                 if (!empty($asset->browser_download_url) && preg_match('/\.zip$/i', $asset->name)) {
                     return $asset->browser_download_url;
                 }
             }
+        }
+
+        // Fallback to zipball (needs folder rename)
+        if (isset($remote->zipball_url)) {
+            return $remote->zipball_url;
         }
 
         return '';

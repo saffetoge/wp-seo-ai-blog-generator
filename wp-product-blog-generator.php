@@ -3,7 +3,7 @@
  * Plugin Name: WP SEO AI Blog Generator
  * Plugin URI: https://github.com/saffetoge/wp-seo-ai-blog-generator
  * Description: WordPress eklentisi ile ürün adına göre SEO uyumlu blog yazıları oluşturun. Teknik özellikler ve açıklamaları otomatik olarak içerir.
- * Version: 1.1.1
+ * Version: 1.1.2
  * Author: Saffet Öge
  * Author URI: https://github.com/saffetoge
  * License: GPL v2 or later
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('WPBG_VERSION', '1.1.1');
+define('WPBG_VERSION', '1.1.2');
 define('WPBG_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WPBG_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WPBG_PLUGIN_BASENAME', plugin_basename(__FILE__));
