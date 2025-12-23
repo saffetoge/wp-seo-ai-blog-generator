@@ -3,7 +3,7 @@
  * Plugin Name: WP SEO AI Blog Generator
  * Plugin URI: https://github.com/saffetoge/wp-seo-ai-blog-generator
  * Description: WordPress eklentisi ile ürün adına göre SEO uyumlu blog yazıları oluşturun. Teknik özellikler ve açıklamaları otomatik olarak içerir.
- * Version: 1.0.9
+ * Version: 1.1.0
  * Author: Saffet Öge
  * Author URI: https://github.com/saffetoge
  * License: GPL v2 or later
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('WPBG_VERSION', '1.0.9');
+define('WPBG_VERSION', '1.1.0');
 define('WPBG_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WPBG_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WPBG_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -519,19 +519,101 @@ class WP_Product_Blog_Generator {
                     </table>
                     
                     <p class="submit">
-                        <input type="submit" name="save_ai_settings" id="save_ai_settings" 
+                        <input type="submit" name="save_ai_settings" id="save_ai_settings"
                                class="button-primary" value="<?php _e('Ayarları Kaydet', 'wp-product-blog-generator'); ?>">
                         <button type="button" id="test_ai_connection" class="button">
                             <?php _e('Bağlantıyı Test Et', 'wp-product-blog-generator'); ?>
                         </button>
-                        <a href="<?php echo esc_url(add_query_arg('refresh_updates', '1', admin_url('admin.php?page=wpbg-ai-settings'))); ?>" 
+                        <a href="<?php echo esc_url(add_query_arg('refresh_updates', '1', admin_url('admin.php?page=wpbg-ai-settings'))); ?>"
                            class="button button-secondary">
                             <?php _e('Güncellemeleri Kontrol Et', 'wp-product-blog-generator'); ?>
                         </a>
                     </p>
                 </form>
-                
+
                 <div id="test-result" style="display:none; margin-top: 20px;"></div>
+
+                <?php if (isset($_GET['debug_update'])): ?>
+                <div class="wpbg-debug-section" style="margin-top: 30px; padding: 20px; background: #f9f9f9; border: 1px solid #ccc;">
+                    <h3>Debug: GitHub Güncelleme Bilgileri</h3>
+                    <?php
+                    $settings = get_option('wpbg_ai_settings', array());
+                    $token = isset($settings['github_access_token']) ? $settings['github_access_token'] : '';
+
+                    echo '<p><strong>Token durumu:</strong> ' . ($token ? 'Var (' . substr($token, 0, 10) . '...)' : 'YOK!') . '</p>';
+
+                    // GitHub API'ye bağlan
+                    $url = "https://api.github.com/repos/saffetoge/wp-seo-ai-blog-generator/releases/latest";
+                    $args = array(
+                        'headers' => array(
+                            'Accept' => 'application/vnd.github.v3+json',
+                            'User-Agent' => 'WordPress/' . get_bloginfo('version')
+                        )
+                    );
+                    if ($token) {
+                        $args['headers']['Authorization'] = 'token ' . $token;
+                    }
+
+                    $response = wp_remote_get($url, $args);
+                    $code = wp_remote_retrieve_response_code($response);
+
+                    echo '<p><strong>API URL:</strong> ' . esc_html($url) . '</p>';
+                    echo '<p><strong>HTTP Kodu:</strong> ' . esc_html($code) . '</p>';
+
+                    if (is_wp_error($response)) {
+                        echo '<p style="color:red;"><strong>Hata:</strong> ' . esc_html($response->get_error_message()) . '</p>';
+                    } elseif ($code !== 200) {
+                        echo '<p style="color:red;"><strong>API Hatası:</strong> ' . esc_html(wp_remote_retrieve_body($response)) . '</p>';
+                    } else {
+                        $data = json_decode(wp_remote_retrieve_body($response));
+                        echo '<p><strong>Release Tag:</strong> ' . esc_html($data->tag_name) . '</p>';
+                        echo '<p><strong>Zipball URL:</strong> ' . esc_html($data->zipball_url) . '</p>';
+
+                        if (!empty($data->assets)) {
+                            echo '<p><strong>Assets:</strong></p><ul>';
+                            foreach ($data->assets as $asset) {
+                                echo '<li>' . esc_html($asset->name) . ' - ' . esc_html($asset->browser_download_url) . '</li>';
+                            }
+                            echo '</ul>';
+                        } else {
+                            echo '<p style="color:orange;"><strong>Assets:</strong> Yok (zipball kullanılacak)</p>';
+                        }
+
+                        // Test download
+                        echo '<h4>İndirme Testi:</h4>';
+                        $download_url = $data->zipball_url;
+                        echo '<p><strong>Test URL:</strong> ' . esc_html($download_url) . '</p>';
+
+                        $test_response = wp_remote_head($download_url, array(
+                            'timeout' => 30,
+                            'headers' => array(
+                                'Authorization' => 'token ' . $token,
+                                'User-Agent' => 'WordPress/' . get_bloginfo('version')
+                            )
+                        ));
+
+                        $test_code = wp_remote_retrieve_response_code($test_response);
+                        echo '<p><strong>İndirme Test Kodu:</strong> ' . esc_html($test_code) . '</p>';
+
+                        if ($test_code === 200 || $test_code === 302) {
+                            echo '<p style="color:green;"><strong>Sonuç:</strong> İndirme mümkün görünüyor!</p>';
+                        } else {
+                            echo '<p style="color:red;"><strong>Sonuç:</strong> İndirme başarısız - HTTP ' . $test_code . '</p>';
+                            if (is_wp_error($test_response)) {
+                                echo '<p style="color:red;">' . esc_html($test_response->get_error_message()) . '</p>';
+                            }
+                        }
+                    }
+                    ?>
+                </div>
+                <?php endif; ?>
+
+                <p style="margin-top: 20px;">
+                    <a href="<?php echo esc_url(add_query_arg('debug_update', '1', admin_url('admin.php?page=wpbg-ai-settings'))); ?>"
+                       class="button">
+                        <?php _e('GitHub Debug Bilgilerini Göster', 'wp-product-blog-generator'); ?>
+                    </a>
+                </p>
             </div>
         </div>
         
