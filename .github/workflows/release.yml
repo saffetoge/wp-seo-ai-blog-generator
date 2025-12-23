@@ -49,3 +49,20 @@ jobs:
             --notes "Release v${{ steps.version.outputs.version }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup old releases (keep last 5)
+        run: |
+          echo "Fetching releases..."
+          releases=$(gh release list --limit 100 --json tagName -q '.[].tagName')
+          count=0
+          for tag in $releases; do
+            count=$((count + 1))
+            if [ $count -gt 5 ]; then
+              echo "Deleting old release: $tag"
+              gh release delete "$tag" --yes || true
+              git push origin --delete "$tag" 2>/dev/null || true
+            fi
+          done
+          echo "Cleanup complete. Kept last 5 releases."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

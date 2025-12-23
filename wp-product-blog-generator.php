@@ -3,7 +3,7 @@
  * Plugin Name: WP SEO AI Blog Generator
  * Plugin URI: https://github.com/saffetoge/wp-seo-ai-blog-generator
  * Description: WordPress eklentisi ile ürün adına göre SEO uyumlu blog yazıları oluşturun. Teknik özellikler ve açıklamaları otomatik olarak içerir.
- * Version: 1.1.3
+ * Version: 1.1.4
  * Author: Saffet Öge
  * Author URI: https://github.com/saffetoge
  * License: GPL v2 or later
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('WPBG_VERSION', '1.1.3');
+define('WPBG_VERSION', '1.1.4');
 define('WPBG_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WPBG_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WPBG_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -579,9 +579,20 @@ class WP_Product_Blog_Generator {
                             echo '<p style="color:orange;"><strong>Assets:</strong> Yok (zipball kullanılacak)</p>';
                         }
 
-                        // Test download
+                        // Test download - prefer asset URL
                         echo '<h4>İndirme Testi:</h4>';
-                        $download_url = $data->zipball_url;
+                        $download_url = '';
+                        if (!empty($data->assets)) {
+                            foreach ($data->assets as $asset) {
+                                if (preg_match('/\.zip$/i', $asset->name)) {
+                                    $download_url = $asset->browser_download_url;
+                                    break;
+                                }
+                            }
+                        }
+                        if (empty($download_url)) {
+                            $download_url = $data->zipball_url;
+                        }
                         echo '<p><strong>Test URL:</strong> ' . esc_html($download_url) . '</p>';
 
                         $test_response = wp_remote_head($download_url, array(
