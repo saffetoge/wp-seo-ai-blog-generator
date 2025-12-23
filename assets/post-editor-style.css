@@ -1,0 +1,84 @@
+/**
+ * WPBG Post Editor Styles
+ */
+
+.wpbg-post-meta-box {
+    padding: 5px 0;
+}
+
+.wpbg-post-meta-box .wpbg-section {
+    margin-bottom: 12px;
+}
+
+.wpbg-post-meta-box label {
+    display: block;
+    margin-bottom: 5px;
+    color: #1d2327;
+}
+
+.wpbg-post-meta-box input[type="text"],
+.wpbg-post-meta-box textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #8c8f94;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.wpbg-post-meta-box input[type="text"]:focus,
+.wpbg-post-meta-box textarea:focus {
+    border-color: #2271b1;
+    box-shadow: 0 0 0 1px #2271b1;
+    outline: none;
+}
+
+.wpbg-post-meta-box .button {
+    width: 100%;
+    text-align: center;
+    padding: 8px 12px;
+    height: auto;
+    line-height: 1.4;
+}
+
+.wpbg-post-meta-box .button-primary {
+    background: #2271b1;
+    border-color: #2271b1;
+}
+
+.wpbg-post-meta-box .button-primary:hover {
+    background: #135e96;
+    border-color: #135e96;
+}
+
+.wpbg-post-meta-box .button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.wpbg-post-meta-box .description {
+    color: #646970;
+    font-size: 12px;
+    font-style: italic;
+    margin: 5px 0 0 0;
+}
+
+.wpbg-post-meta-box .wpbg-status {
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.wpbg-post-meta-box textarea {
+    min-height: 80px;
+    resize: vertical;
+}
+
+/* Gutenberg sidebar adjustments */
+.edit-post-sidebar .wpbg-post-meta-box {
+    padding: 0;
+}
+
+.edit-post-sidebar .wpbg-post-meta-box .button {
+    font-size: 13px;
+}

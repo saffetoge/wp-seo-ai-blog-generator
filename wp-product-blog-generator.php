@@ -3,7 +3,7 @@
  * Plugin Name: WP SEO AI Blog Generator
  * Plugin URI: https://github.com/saffetoge/wp-seo-ai-blog-generator
  * Description: WordPress eklentisi ile ürün adına göre SEO uyumlu blog yazıları oluşturun. Teknik özellikler ve açıklamaları otomatik olarak içerir.
- * Version: 1.0.3
+ * Version: 1.0.4
  * Author: Saffet Öge
  * Author URI: https://github.com/saffetoge
  * License: GPL v2 or later
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('WPBG_VERSION', '1.0.3');
+define('WPBG_VERSION', '1.0.4');
 define('WPBG_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WPBG_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WPBG_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -72,6 +72,12 @@ class WP_Product_Blog_Generator {
         add_action('wp_ajax_analyze_seo', array($this, 'analyze_seo_ajax'));
         add_action('wp_ajax_fetch_ai_models', array($this, 'fetch_ai_models_ajax'));
         add_action('wp_ajax_test_ai_connection', array($this, 'test_ai_connection_ajax'));
+
+        // Post edit page integration
+        add_action('add_meta_boxes', array($this, 'add_post_meta_box'));
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_post_editor_scripts'));
+        add_action('wp_ajax_wpbg_regenerate_content', array($this, 'regenerate_content_ajax'));
+        add_action('wp_ajax_wpbg_format_content', array($this, 'format_content_ajax'));
     }
     
     /**
@@ -824,6 +830,182 @@ class WP_Product_Blog_Generator {
         require_once WPBG_PLUGIN_DIR . 'includes/class-ai-integration.php';
         $ai = new WPBG_AI_Integration();
         $ai->test_ai_connection();
+    }
+
+    /**
+     * Add meta box to post edit page
+     */
+    public function add_post_meta_box() {
+        add_meta_box(
+            'wpbg_ai_assistant',
+            __('AI Blog Asistanı', 'wp-product-blog-generator'),
+            array($this, 'render_post_meta_box'),
+            array('post', 'page'),
+            'side',
+            'high'
+        );
+    }
+
+    /**
+     * Enqueue scripts for post editor
+     */
+    public function enqueue_post_editor_scripts($hook) {
+        if (!in_array($hook, array('post.php', 'post-new.php'))) {
+            return;
+        }
+
+        wp_enqueue_style('wpbg-post-editor-style', WPBG_PLUGIN_URL . 'assets/post-editor-style.css', array(), WPBG_VERSION);
+        wp_enqueue_script('wpbg-post-editor-script', WPBG_PLUGIN_URL . 'assets/post-editor-script.js', array('jquery'), WPBG_VERSION, true);
+
+        wp_localize_script('wpbg-post-editor-script', 'wpbg_post_editor', array(
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('wpbg_post_editor_nonce'),
+            'generating_text' => __('İçerik oluşturuluyor...', 'wp-product-blog-generator'),
+            'formatting_text' => __('Metin formatlanıyor...', 'wp-product-blog-generator'),
+            'error_text' => __('Bir hata oluştu.', 'wp-product-blog-generator'),
+            'success_text' => __('İşlem tamamlandı!', 'wp-product-blog-generator')
+        ));
+    }
+
+    /**
+     * Render meta box content
+     */
+    public function render_post_meta_box($post) {
+        ?>
+        <div class="wpbg-post-meta-box">
+            <div class="wpbg-section">
+                <label for="wpbg-focus-keyword-meta"><strong><?php _e('Odak Anahtar Kelime:', 'wp-product-blog-generator'); ?></strong></label>
+                <input type="text" id="wpbg-focus-keyword-meta" class="widefat" placeholder="<?php _e('Opsiyonel...', 'wp-product-blog-generator'); ?>">
+            </div>
+
+            <div class="wpbg-section" style="margin-top: 12px;">
+                <button type="button" id="wpbg-regenerate-btn" class="button button-primary widefat">
+                    <?php _e('Başlığa Göre Yeniden Oluştur', 'wp-product-blog-generator'); ?>
+                </button>
+                <p class="description" style="margin-top: 5px;"><?php _e('Mevcut başlığı kullanarak yeni içerik üretir.', 'wp-product-blog-generator'); ?></p>
+            </div>
+
+            <div class="wpbg-section" style="margin-top: 12px;">
+                <button type="button" id="wpbg-format-btn" class="button widefat">
+                    <?php _e('Mevcut İçeriği Formatla', 'wp-product-blog-generator'); ?>
+                </button>
+                <p class="description" style="margin-top: 5px;"><?php _e('Mevcut içeriği SEO uyumlu formata dönüştürür.', 'wp-product-blog-generator'); ?></p>
+            </div>
+
+            <div class="wpbg-section" style="margin-top: 12px;">
+                <label for="wpbg-custom-text"><strong><?php _e('Özel Metin:', 'wp-product-blog-generator'); ?></strong></label>
+                <textarea id="wpbg-custom-text" class="widefat" rows="4" placeholder="<?php _e('Formatlamak istediğiniz metni buraya yapıştırın...', 'wp-product-blog-generator'); ?>"></textarea>
+                <button type="button" id="wpbg-format-custom-btn" class="button widefat" style="margin-top: 8px;">
+                    <?php _e('Bu Metni Formatla ve Ekle', 'wp-product-blog-generator'); ?>
+                </button>
+            </div>
+
+            <div id="wpbg-meta-status" class="wpbg-status" style="display: none; margin-top: 12px;"></div>
+        </div>
+        <?php
+    }
+
+    /**
+     * AJAX handler for regenerating content based on title
+     */
+    public function regenerate_content_ajax() {
+        check_ajax_referer('wpbg_post_editor_nonce', 'nonce');
+
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(__('Yetkiniz bulunmuyor.', 'wp-product-blog-generator'));
+        }
+
+        $title = sanitize_text_field($_POST['title']);
+        $keyword = isset($_POST['keyword']) ? sanitize_text_field($_POST['keyword']) : '';
+        $current_content = isset($_POST['current_content']) ? wp_kses_post($_POST['current_content']) : '';
+
+        if (empty($title)) {
+            wp_send_json_error(__('Başlık boş olamaz.', 'wp-product-blog-generator'));
+        }
+
+        require_once WPBG_PLUGIN_DIR . 'includes/class-ai-integration.php';
+        $ai = new WPBG_AI_Integration();
+
+        $prompt = "Aşağıdaki başlık için SEO uyumlu, kapsamlı bir blog yazısı oluştur.
+Başlık: {$title}
+" . ($keyword ? "Odak anahtar kelime: {$keyword}" : "") . "
+
+Yazı şu özelliklere sahip olmalı:
+- H2 ve H3 başlıklar kullanılmalı
+- Paragraflar kısa ve okunabilir olmalı
+- Listeler ve maddeler kullanılmalı
+- SEO dostu yapıda olmalı
+- Türkçe yazılmalı
+- HTML formatında olmalı (sadece içerik, html/body tagları olmadan)";
+
+        $result = $ai->generate_content($prompt);
+
+        if (isset($result['error'])) {
+            wp_send_json_error($result['error']);
+        }
+
+        wp_send_json_success(array(
+            'content' => $result['content'],
+            'message' => __('İçerik başarıyla oluşturuldu!', 'wp-product-blog-generator')
+        ));
+    }
+
+    /**
+     * AJAX handler for formatting content
+     */
+    public function format_content_ajax() {
+        check_ajax_referer('wpbg_post_editor_nonce', 'nonce');
+
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(__('Yetkiniz bulunmuyor.', 'wp-product-blog-generator'));
+        }
+
+        $content = isset($_POST['content']) ? wp_kses_post($_POST['content']) : '';
+        $title = isset($_POST['title']) ? sanitize_text_field($_POST['title']) : '';
+        $keyword = isset($_POST['keyword']) ? sanitize_text_field($_POST['keyword']) : '';
+        $mode = isset($_POST['mode']) ? sanitize_text_field($_POST['mode']) : 'format';
+
+        if (empty($content)) {
+            wp_send_json_error(__('İçerik boş olamaz.', 'wp-product-blog-generator'));
+        }
+
+        require_once WPBG_PLUGIN_DIR . 'includes/class-ai-integration.php';
+        $ai = new WPBG_AI_Integration();
+
+        if ($mode === 'append') {
+            $prompt = "Aşağıdaki metni SEO uyumlu blog yazısı formatına dönüştür. Mevcut yapıyı koru ama şu iyileştirmeleri yap:
+- Uygun yerlere H2 ve H3 başlıklar ekle
+- Paragrafları düzenle
+- Gerekirse listeler oluştur
+- HTML formatında döndür (sadece içerik, html/body tagları olmadan)
+- İçeriği zenginleştir ama orijinal bilgileri koru
+
+Metin:
+{$content}";
+        } else {
+            $prompt = "Aşağıdaki blog yazısını SEO açısından iyileştir ve formatla. Mevcut içeriği koru ama şu düzenlemeleri yap:
+- Başlıkları (H2, H3) kontrol et ve gerekirse ekle
+- Paragraf yapısını iyileştir
+- Okunabilirliği artır
+- " . ($keyword ? "'{$keyword}' anahtar kelimesini doğal şekilde kullan" : "SEO uyumlu hale getir") . "
+- HTML formatında döndür (sadece içerik)
+- Orijinal içeriğin anlamını ve bilgilerini koru
+
+Başlık: {$title}
+İçerik:
+{$content}";
+        }
+
+        $result = $ai->generate_content($prompt);
+
+        if (isset($result['error'])) {
+            wp_send_json_error($result['error']);
+        }
+
+        wp_send_json_success(array(
+            'content' => $result['content'],
+            'message' => __('İçerik başarıyla formatlandı!', 'wp-product-blog-generator')
+        ));
     }
 }
 
