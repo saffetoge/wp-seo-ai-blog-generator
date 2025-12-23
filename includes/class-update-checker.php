@@ -246,9 +246,20 @@ class WPBG_Update_Checker
         $response_code = wp_remote_retrieve_response_code($response);
         if ($response_code !== 200) {
             @unlink($tmpfname);
-            return new WP_Error('http_error', sprintf(__('İndirme hatası: HTTP %d', 'wp-product-blog-generator'), $response_code));
+            $body = wp_remote_retrieve_body($response);
+            error_log('WPBG Download Error - URL: ' . $package);
+            error_log('WPBG Download Error - HTTP Code: ' . $response_code);
+            error_log('WPBG Download Error - Response: ' . $body);
+            return new WP_Error('http_error', sprintf(__('İndirme hatası: HTTP %d - %s', 'wp-product-blog-generator'), $response_code, substr($body, 0, 200)));
         }
 
+        // Check if file was actually downloaded
+        if (!file_exists($tmpfname) || filesize($tmpfname) < 1000) {
+            @unlink($tmpfname);
+            return new WP_Error('http_error', __('Dosya indirilemedi veya boş.', 'wp-product-blog-generator'));
+        }
+
+        error_log('WPBG Download Success - File: ' . $tmpfname . ' Size: ' . filesize($tmpfname));
         return $tmpfname;
     }
 
