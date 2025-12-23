@@ -147,18 +147,19 @@ class WPBG_Update_Checker
     }
 
     /**
-     * Pick a stable release asset zip if available, otherwise fallback to zipball.
-     * For private repos, use API URL with asset ID for proper authentication.
+     * Get download URL - use zipball for private repos (more reliable)
      */
     private function get_release_download_url($remote)
     {
+        // For private repos, always use zipball_url (works with token auth)
+        if ($this->github_token && isset($remote->zipball_url)) {
+            return $remote->zipball_url;
+        }
+
+        // For public repos, try asset first
         if (isset($remote->assets) && is_array($remote->assets)) {
             foreach ($remote->assets as $asset) {
-                if (!empty($asset->name) && preg_match('/\.zip$/i', $asset->name)) {
-                    // For private repos, use API endpoint instead of browser_download_url
-                    if ($this->github_token && isset($asset->id)) {
-                        return "https://api.github.com/repos/{$this->username}/{$this->repository}/releases/assets/{$asset->id}";
-                    }
+                if (!empty($asset->browser_download_url) && preg_match('/\.zip$/i', $asset->name)) {
                     return $asset->browser_download_url;
                 }
             }
@@ -177,7 +178,18 @@ class WPBG_Update_Checker
         }
 
         $host = parse_url($url, PHP_URL_HOST);
-        if (!$host || (strpos($host, 'github.com') === false && strpos($host, 'api.github.com') === false)) {
+
+        // Include codeload.github.com for zipball downloads
+        $allowed_hosts = array('github.com', 'api.github.com', 'codeload.github.com');
+        $is_github = false;
+        foreach ($allowed_hosts as $allowed) {
+            if (strpos($host, $allowed) !== false) {
+                $is_github = true;
+                break;
+            }
+        }
+
+        if (!$is_github) {
             return $args;
         }
 
@@ -186,11 +198,6 @@ class WPBG_Update_Checker
         }
 
         $args['headers']['Authorization'] = 'token ' . $this->github_token;
-
-        // For asset downloads, we need application/octet-stream Accept header
-        if (strpos($url, '/releases/assets/') !== false) {
-            $args['headers']['Accept'] = 'application/octet-stream';
-        }
 
         return $args;
     }
