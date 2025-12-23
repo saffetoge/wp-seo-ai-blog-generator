@@ -1,0 +1,36 @@
+name: Build and Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get plugin version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create plugin ZIP
+        run: |
+          # Create a temporary directory with the correct plugin folder name
+          mkdir -p build/wp-product-blog-generator
+
+          # Copy all plugin files (excluding git and github folders)
+          rsync -av --exclude='.git' --exclude='.github' --exclude='build' ./ build/wp-product-blog-generator/
+
+          # Create the ZIP file
+          cd build
+          zip -r wp-product-blog-generator-${{ steps.version.outputs.VERSION }}.zip wp-product-blog-generator
+
+      - name: Upload ZIP to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/wp-product-blog-generator-${{ steps.version.outputs.VERSION }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
