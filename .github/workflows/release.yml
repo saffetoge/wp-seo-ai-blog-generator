@@ -15,15 +15,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Read version
         id: version
         run: |
-          VERSION="$(sed -nE 's/^[[:space:]]*\\*[[:space:]]*Version:[[:space:]]*([0-9.]+).*/\\1/p' wp-product-blog-generator.php | head -n1)"
+          VERSION=$(grep -m1 "Version:" wp-product-blog-generator.php | grep -oE "[0-9]+\.[0-9]+\.[0-9]+")
+          echo "Found version: $VERSION"
           if [ -z "$VERSION" ]; then
-            echo "Version not found in plugin header."
+            echo "Version not found!"
             exit 1
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -32,18 +31,21 @@ jobs:
       - name: Build plugin zip
         run: |
           mkdir -p dist/wp-product-blog-generator
-          rsync -a --delete \
-            --exclude ".git/" \
-            --exclude ".github/" \
-            --exclude "dist/" \
-            ./ dist/wp-product-blog-generator/
-          (cd dist && zip -r wp-product-blog-generator.zip wp-product-blog-generator)
+          cp -r assets includes languages *.php dist/wp-product-blog-generator/ 2>/dev/null || true
+          cp -r dist/wp-product-blog-generator/*.php dist/wp-product-blog-generator/ 2>/dev/null || true
+          cd dist && zip -r wp-product-blog-generator.zip wp-product-blog-generator
+          ls -la
 
-      - name: Create or update release
-        uses: ncipollo/release-action@v1
-        with:
-          tag: ${{ steps.version.outputs.tag }}
-          name: ${{ steps.version.outputs.tag }}
-          artifacts: dist/wp-product-blog-generator.zip
-          allowUpdates: true
-          replacesArtifacts: true
+      - name: Delete old release
+        run: gh release delete "v${{ steps.version.outputs.version }}" --yes || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create release
+        run: |
+          gh release create "v${{ steps.version.outputs.version }}" \
+            dist/wp-product-blog-generator.zip \
+            --title "Version ${{ steps.version.outputs.version }}" \
+            --notes "Release v${{ steps.version.outputs.version }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
