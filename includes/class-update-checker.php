@@ -148,12 +148,17 @@ class WPBG_Update_Checker
 
     /**
      * Pick a stable release asset zip if available, otherwise fallback to zipball.
+     * For private repos, use API URL with asset ID for proper authentication.
      */
     private function get_release_download_url($remote)
     {
         if (isset($remote->assets) && is_array($remote->assets)) {
             foreach ($remote->assets as $asset) {
-                if (!empty($asset->browser_download_url) && preg_match('/\.zip$/i', $asset->browser_download_url)) {
+                if (!empty($asset->name) && preg_match('/\.zip$/i', $asset->name)) {
+                    // For private repos, use API endpoint instead of browser_download_url
+                    if ($this->github_token && isset($asset->id)) {
+                        return "https://api.github.com/repos/{$this->username}/{$this->repository}/releases/assets/{$asset->id}";
+                    }
                     return $asset->browser_download_url;
                 }
             }
@@ -181,6 +186,12 @@ class WPBG_Update_Checker
         }
 
         $args['headers']['Authorization'] = 'token ' . $this->github_token;
+
+        // For asset downloads, we need application/octet-stream Accept header
+        if (strpos($url, '/releases/assets/') !== false) {
+            $args['headers']['Accept'] = 'application/octet-stream';
+        }
+
         return $args;
     }
 
