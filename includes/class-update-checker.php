@@ -39,6 +39,7 @@ class WPBG_Update_Checker
         add_filter('plugins_api', array($this, 'plugin_info'), 20, 3);
         add_filter('http_request_args', array($this, 'add_github_auth_header'), 10, 2);
         add_filter('upgrader_source_selection', array($this, 'rename_github_folder'), 10, 4);
+        add_action('admin_notices', array($this, 'show_update_status_notice'));
     }
 
     /**
@@ -205,5 +206,31 @@ class WPBG_Update_Checker
 
         $wp_filesystem->move($source, $desired_source, true);
         return $desired_source;
+    }
+
+    /**
+     * Show admin notice about update status
+     */
+    public function show_update_status_notice()
+    {
+        if (!isset($_GET['refresh_updates']) || !isset($_GET['page']) || $_GET['page'] !== 'wpbg-ai-settings') {
+            return;
+        }
+
+        $remote = $this->get_remote_data();
+
+        if (!$remote) {
+            echo '<div class="notice notice-error is-dismissible"><p>' . __('GitHub bağlantısı kurulamadı. Lütfen API token ayarlarınızı kontrol edin.', 'wp-product-blog-generator') . '</p></div>';
+            return;
+        }
+
+        $remote_version = ltrim($remote->tag_name, 'vV');
+        $has_update = version_compare($this->version, $remote_version, '<');
+
+        if ($has_update) {
+            echo '<div class="notice notice-warning is-dismissible"><p>' . sprintf(__('Yeni bir güncelleme bulundu! Mevcut Versiyon: %s, Yeni Versiyon: %s. <a href="%s">Eklentiler</a> sayfasından güncelleyebilirsiniz.', 'wp-product-blog-generator'), $this->version, $remote_version, admin_url('plugins.php')) . '</p></div>';
+        } else {
+            echo '<div class="notice notice-success is-dismissible"><p>' . sprintf(__('Eklentiniz güncel. Mevcut Versiyon: %s, GitHub Versiyonu: %s.', 'wp-product-blog-generator'), $this->version, $remote_version) . '</p></div>';
+        }
     }
 }
