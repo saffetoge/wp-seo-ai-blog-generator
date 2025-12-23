@@ -57,7 +57,7 @@ class WPBG_Update_Checker
         if ($remote) {
             $remote_version = ltrim($remote->tag_name, 'vV');
 
-            error_log('WPBG Update Check: Current: ' . $this->version . ', Remote: ' . $remote_version);
+            error_log('WPBG Update Check - Local: ' . $this->version . ' | Remote: ' . $remote_version);
 
             if (version_compare($this->version, $remote_version, '<')) {
                 $res = new stdClass();
@@ -233,7 +233,7 @@ class WPBG_Update_Checker
             'filename' => $tmpfname,
             'headers' => array(
                 'Authorization' => 'token ' . $this->github_token,
-                'Accept' => 'application/vnd.github.v3+json',
+                'Accept' => 'application/vnd.github.v3.raw',
                 'User-Agent' => 'WordPress/' . get_bloginfo('version')
             )
         ));
