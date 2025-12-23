@@ -518,6 +518,10 @@ class WP_Product_Blog_Generator {
                         <button type="button" id="test_ai_connection" class="button">
                             <?php _e('Bağlantıyı Test Et', 'wp-product-blog-generator'); ?>
                         </button>
+                        <a href="<?php echo esc_url(add_query_arg('refresh_updates', '1', admin_url('admin.php?page=wpbg-ai-settings'))); ?>" 
+                           class="button button-secondary">
+                            <?php _e('Güncellemeleri Kontrol Et', 'wp-product-blog-generator'); ?>
+                        </a>
                     </p>
                 </form>
                 
@@ -551,6 +555,7 @@ class WP_Product_Blog_Generator {
                 $.ajax({
                     url: '<?php echo admin_url('admin-ajax.php'); ?>',
                     type: 'POST',
+                    dataType: 'json',
                     data: {
                         action: 'fetch_ai_models',
                         ai_provider: provider,
@@ -571,8 +576,9 @@ class WP_Product_Blog_Generator {
                             alert('Hata: ' + response.data);
                         }
                     },
-                    error: function() {
-                        alert('API ile iletişim kurulurken bir hata oluştu.');
+                    error: function(xhr, status, error) {
+                        const details = xhr && xhr.responseText ? ('\n' + xhr.responseText) : '';
+                        alert('API ile iletişim kurulurken bir hata oluştu: ' + error + details);
                     },
                     complete: function() {
                         button.prop('disabled', false).text('Modelleri Getir');

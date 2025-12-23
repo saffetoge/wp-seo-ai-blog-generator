@@ -19,8 +19,8 @@ class WPBG_Update_Checker
 
     public function __construct()
     {
-        $this->plugin_file = 'wp-product-blog-generator/wp-product-blog-generator.php';
-        $this->plugin_slug = 'wp-product-blog-generator';
+        $this->plugin_file = WPBG_PLUGIN_BASENAME;
+        $this->plugin_slug = dirname(WPBG_PLUGIN_BASENAME);
 
         // Get GitHub Token from settings
         $settings = get_option('wpbg_ai_settings');
@@ -37,6 +37,8 @@ class WPBG_Update_Checker
         add_filter('site_transient_update_plugins', array($this, 'check_update'));
         add_filter('transient_update_plugins', array($this, 'check_update'));
         add_filter('plugins_api', array($this, 'plugin_info'), 20, 3);
+        add_filter('http_request_args', array($this, 'add_github_auth_header'), 10, 2);
+        add_filter('upgrader_source_selection', array($this, 'rename_github_folder'), 10, 4);
     }
 
     /**
@@ -50,20 +52,22 @@ class WPBG_Update_Checker
 
         $remote = $this->get_remote_data();
 
-        if ($remote && version_compare($this->version, $remote->tag_name, '<')) {
-            $res = new stdClass();
-            $res->slug = $this->plugin_slug;
-            $res->plugin = $this->plugin_file;
-            $res->new_version = $remote->tag_name;
-            $res->package = $remote->zipball_url;
-            $res->url = 'https://github.com/' . $this->username . '/' . $this->repository;
+        if ($remote) {
+            $remote_version = ltrim($remote->tag_name, 'vV');
 
-            // For private repos, add the token to the package URL
-            if ($this->github_token) {
-                $res->package = add_query_arg('access_token', $this->github_token, $res->package);
+            error_log('WPBG Update Check: Current: ' . $this->version . ', Remote: ' . $remote_version);
+
+            if (version_compare($this->version, $remote_version, '<')) {
+                $res = new stdClass();
+                $res->slug = $this->plugin_slug;
+                $res->plugin = $this->plugin_file;
+                $res->new_version = $remote_version;
+                $res->package = $this->get_release_download_url($remote);
+                $res->url = 'https://github.com/' . $this->username . '/' . $this->repository;
+
+                $transient->response[$this->plugin_file] = $res;
+                error_log('WPBG Update Check: Update available and injected into transient.');
             }
-
-            $transient->response[$this->plugin_file] = $res;
         }
 
         return $transient;
@@ -74,7 +78,10 @@ class WPBG_Update_Checker
      */
     private function get_remote_data()
     {
-        $remote = get_transient('wpbg_github_update_data');
+        // Force refresh if user is on the updates page or forced via setting
+        $force_check = isset($_GET['force-check']) || (isset($_GET['page']) && $_GET['page'] === 'wpbg-ai-settings' && isset($_GET['refresh_updates']));
+
+        $remote = $force_check ? false : get_transient('wpbg_github_update_data');
 
         if (false === $remote) {
             $url = "https://api.github.com/repos/{$this->username}/{$this->repository}/releases/latest";
@@ -129,12 +136,74 @@ class WPBG_Update_Checker
         $res->version = $remote->tag_name;
         $res->author = 'Saffet Öge';
         $res->homepage = 'https://github.com/' . $this->username . '/' . $this->repository;
-        $res->download_link = $remote->zipball_url;
+        $res->download_link = $this->get_release_download_url($remote);
         $res->sections = array(
             'description' => 'WordPress eklentisi ile ürün adına göre SEO uyumlu blog yazıları oluşturun. AI ve SEO iyileştirmeleri içerir.',
             'changelog' => $remote->body
         );
 
         return $res;
+    }
+
+    /**
+     * Pick a stable release asset zip if available, otherwise fallback to zipball.
+     */
+    private function get_release_download_url($remote)
+    {
+        if (isset($remote->assets) && is_array($remote->assets)) {
+            foreach ($remote->assets as $asset) {
+                if (!empty($asset->browser_download_url) && preg_match('/\.zip$/i', $asset->browser_download_url)) {
+                    return $asset->browser_download_url;
+                }
+            }
+        }
+
+        return isset($remote->zipball_url) ? $remote->zipball_url : '';
+    }
+
+    /**
+     * Add GitHub authorization header for private repos.
+     */
+    public function add_github_auth_header($args, $url)
+    {
+        if (empty($this->github_token) || empty($url)) {
+            return $args;
+        }
+
+        $host = parse_url($url, PHP_URL_HOST);
+        if (!$host || (strpos($host, 'github.com') === false && strpos($host, 'api.github.com') === false)) {
+            return $args;
+        }
+
+        if (empty($args['headers'])) {
+            $args['headers'] = array();
+        }
+
+        $args['headers']['Authorization'] = 'token ' . $this->github_token;
+        return $args;
+    }
+
+    /**
+     * Ensure the extracted folder matches the plugin slug for WP updates.
+     */
+    public function rename_github_folder($source, $remote_source, $upgrader, $hook_extra)
+    {
+        if (empty($hook_extra['plugin']) || $hook_extra['plugin'] !== $this->plugin_file) {
+            return $source;
+        }
+
+        $desired_source = trailingslashit($remote_source) . $this->plugin_slug;
+
+        if ($source === $desired_source) {
+            return $source;
+        }
+
+        global $wp_filesystem;
+        if (!$wp_filesystem || !$wp_filesystem->is_dir($source)) {
+            return $source;
+        }
+
+        $wp_filesystem->move($source, $desired_source, true);
+        return $desired_source;
     }
 }
