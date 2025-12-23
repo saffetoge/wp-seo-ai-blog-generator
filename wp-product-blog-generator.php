@@ -760,17 +760,37 @@ class WP_Product_Blog_Generator {
         if (!wp_verify_nonce($_POST['wpbg_ai_settings_nonce'], 'wpbg_ai_settings')) {
             wp_die(__('Güvenlik kontrolü başarısız.', 'wp-product-blog-generator'));
         }
+
+        $existing_settings = get_option('wpbg_ai_settings', array());
+        $ai_provider = isset($_POST['ai_provider']) ? sanitize_text_field(wp_unslash($_POST['ai_provider'])) : 'gemini';
+        $gemini_api_key = isset($_POST['gemini_api_key']) ? sanitize_text_field(wp_unslash($_POST['gemini_api_key'])) : '';
+        $gemini_model = isset($_POST['gemini_model']) ? sanitize_text_field(wp_unslash($_POST['gemini_model'])) : '';
+        $openai_api_key = isset($_POST['openai_api_key']) ? sanitize_text_field(wp_unslash($_POST['openai_api_key'])) : '';
+        $openai_model = isset($_POST['openai_model']) ? sanitize_text_field(wp_unslash($_POST['openai_model'])) : '';
+
+        if ($gemini_api_key === '' && !empty($existing_settings['gemini_api_key'])) {
+            $gemini_api_key = $existing_settings['gemini_api_key'];
+        }
+        if ($gemini_model === '' && !empty($existing_settings['gemini_model'])) {
+            $gemini_model = $existing_settings['gemini_model'];
+        }
+        if ($openai_api_key === '' && !empty($existing_settings['openai_api_key'])) {
+            $openai_api_key = $existing_settings['openai_api_key'];
+        }
+        if ($openai_model === '' && !empty($existing_settings['openai_model'])) {
+            $openai_model = $existing_settings['openai_model'];
+        }
         
         $settings = array(
-            'ai_provider' => sanitize_text_field($_POST['ai_provider']),
-            'gemini_api_key' => sanitize_text_field($_POST['gemini_api_key']),
-            'gemini_model' => sanitize_text_field($_POST['gemini_model']),
-            'openai_api_key' => sanitize_text_field($_POST['openai_api_key']),
-            'openai_model' => sanitize_text_field($_POST['openai_model']),
-            'content_language' => sanitize_text_field($_POST['content_language']),
-            'content_style' => sanitize_text_field($_POST['content_style']),
+            'ai_provider' => $ai_provider,
+            'gemini_api_key' => $gemini_api_key,
+            'gemini_model' => $gemini_model,
+            'openai_api_key' => $openai_api_key,
+            'openai_model' => $openai_model,
+            'content_language' => sanitize_text_field(wp_unslash($_POST['content_language'])),
+            'content_style' => sanitize_text_field(wp_unslash($_POST['content_style'])),
             'include_images' => isset($_POST['include_images']),
-            'github_access_token' => sanitize_text_field($_POST['github_access_token'])
+            'github_access_token' => isset($_POST['github_access_token']) ? sanitize_text_field(wp_unslash($_POST['github_access_token'])) : ''
         );
         
         update_option('wpbg_ai_settings', $settings);
